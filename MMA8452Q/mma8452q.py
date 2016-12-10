@@ -103,6 +103,14 @@ class DataRate(Enum):
         self.register_value = register_value
 
 
+class AccelerationStatus:
+    def __init__(self, overwritten: bool, x: int, y: int, z: int):
+        self.overwritten = overwritten
+        self.x = x
+        self.y = y
+        self.z = z
+
+
 class AccelerometerMMA8452Q:
     def __init__(self, i2c_device: int, i2c_address: int):
         self._address = i2c_address
@@ -129,6 +137,9 @@ class AccelerometerMMA8452Q:
         self._active = True
         self.setup(acceleration_range, fast_read, data_rate)
 
+    def is_data_ready(self):
+        return self._read_flag(_REGISTER_STATUS, _REGISTER_STATUS_FLAG_ANY_AXIS_DATA_READY)
+
     def read_x_acceleration(self):
         return self._read_acceleration(_REGISTER_X_ACCELERATION)
 
@@ -138,12 +149,43 @@ class AccelerometerMMA8452Q:
     def read_z_acceleration(self):
         return self._read_acceleration(_REGISTER_Z_ACCELERATION)
 
+    def read_acceleration_and_status(self):
+        if self._fast_read:
+            [status, x_msb, y_msb, z_msb] = self._read_block(_REGISTER_STATUS, 4)
+            x_acc = _convert_8_bit_acceleration(x_msb, self._range)
+            y_acc = _convert_8_bit_acceleration(y_msb, self._range)
+            z_acc = _convert_8_bit_acceleration(z_msb, self._range)
+        else:
+            [status, x_msb, x_lsb, y_msb, y_lsb, z_msb, z_lsb] = self._read_block(_REGISTER_STATUS, 7)
+            x_acc = _convert_12_bit_acceleration(x_msb, x_lsb, self._range)
+            y_acc = _convert_12_bit_acceleration(y_msb, y_lsb, self._range)
+            z_acc = _convert_12_bit_acceleration(z_msb, z_lsb, self._range)
+
+        overwritten = _is_flag_set(status, _REGISTER_STATUS_FLAG_ANY_AXIS_DATA_OVERWRITTEN)\
+
+        if _is_flag_set(status, _REGISTER_STATUS_FLAG_X_AXIS_DATA_READY):
+            x = x_acc
+        else:
+            x = None
+
+        if _is_flag_set(status, _REGISTER_STATUS_FLAG_Y_AXIS_DATA_READY):
+            y = y_acc
+        else:
+            y = None
+
+        if _is_flag_set(status, _REGISTER_STATUS_FLAG_Z_AXIS_DATA_READY):
+            z = z_acc
+        else:
+            z = None
+
+        return AccelerationStatus(overwritten, x, y, z)
+
     def _wait_for_reset(self, reset_time: datetime):
         time_since_reset = datetime.now() - reset_time
         if time_since_reset.seconds > 30:
             raise Exception("Device took too long to reset")
 
-        if self._check_flag(_REGISTER_CONTROL_2, _REGISTER_CONTROL_2_FLAG_RESET):
+        if self._read_flag(_REGISTER_CONTROL_2, _REGISTER_CONTROL_2_FLAG_RESET):
             self._wait_for_reset(reset_time)
         else:
             return
@@ -174,11 +216,17 @@ class AccelerometerMMA8452Q:
 
         _set_value_in_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK, self._data_rate.register_value)
 
+        self._write_byte(_REGISTER_DATA_CONFIGURATION, data_configuration)
+        self._write_byte(_REGISTER_CONTROL_1, control1)
+
     def _read_acceleration(self, register: int):
         if self._fast_read:
             return _convert_8_bit_acceleration(self._read_byte(register), self._range)
         else:
-            return _convert_12_bit_acceleration(self._read_word(register), self._range)
+            raw_data = self._read_word(register)
+            msb = raw_data & 0x00FF
+            lsb = raw_data & 0xF000 >> 12
+            return _convert_12_bit_acceleration(msb, lsb, self._range)
 
     def _read_byte(self, register: int):
         return self._i2c.read_byte_data(self._address, register)
@@ -186,17 +234,21 @@ class AccelerometerMMA8452Q:
     def _read_word(self, register: int):
         return self._i2c.read_word_data(self._address, register)
 
-    def _check_flag(self, register: int, bit_number: int):
+    def _read_flag(self, register: int, bit_number: int):
         return _is_flag_set(self._read_byte(register), bit_number)
 
+    def _read_block(self, first_register: int, number_of_bytes: int):
+        return self._i2c.read_i2c_block_data(self._address, first_register, number_of_bytes)
 
-def _convert_8_bit_acceleration(raw_data: int, output_range: AccelerationRange):
-    return _convert_to_signed(raw_data, 8) / output_range.step(8)
+    def _write_byte(self, register: int, value: int):
+        return self._i2c.write_byte_data(register, value)
 
 
-def _convert_12_bit_acceleration(raw_data: int, output_range: AccelerationRange):
-    msb = raw_data & 0x00FF
-    lsb = raw_data & 0xF000 >> 12
+def _convert_8_bit_acceleration(msb: int, output_range: AccelerationRange):
+    return _convert_to_signed(msb, 8) / output_range.step(8)
+
+
+def _convert_12_bit_acceleration(msb: int, lsb: int, output_range: AccelerationRange):
     unsigned_acceleration = (msb << 4) + lsb
     return _convert_to_signed(unsigned_acceleration, 12) / output_range.step(12)
 

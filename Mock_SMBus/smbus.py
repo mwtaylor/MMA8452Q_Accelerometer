@@ -14,5 +14,9 @@ class SMBus:
             return 0
 
     @staticmethod
+    def read_i2c_block_data(device_address: int, first_register: int, number_of_bytes: int):
+        return [0] * number_of_bytes
+
+    @staticmethod
     def write_byte_data(device_address: int, register: int, byte: int):
         print("Write {} at register {} on device {}".format(byte, register, device_address))
