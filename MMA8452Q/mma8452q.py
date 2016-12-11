@@ -94,6 +94,9 @@ class DataRate(Enum):
         self._data_rate = data_rate
         self.register_value = register_value
 
+    def period(self):
+        return 1 / self._data_rate
+
 
 class AccelerationStatus:
     def __init__(self, overwritten: bool, x: int, y: int, z: int):
