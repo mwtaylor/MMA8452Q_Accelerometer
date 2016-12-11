@@ -118,6 +118,7 @@ class AccelerometerMMA8452Q:
         self._active = False
 
     def reset(self):
+        self._write_byte(_REGISTER_CONTROL_2, _set_flag(0x00, _REGISTER_CONTROL_2_FLAG_RESET))
         self._wait_for_reset(datetime.now())
         self._synchronize_configuration_registers()
 
