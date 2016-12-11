@@ -238,12 +238,12 @@ class AccelerometerMMA8452Q:
 
 
 def _convert_8_bit_acceleration(msb: int, output_range: AccelerationRange):
-    return _convert_to_signed(msb, 8) / output_range.step(8)
+    return _convert_to_signed(msb, 8) * output_range.step(8)
 
 
 def _convert_12_bit_acceleration(msb: int, lsb: int, output_range: AccelerationRange):
     unsigned_acceleration = (msb << 4) + lsb
-    return _convert_to_signed(unsigned_acceleration, 12) / output_range.step(12)
+    return _convert_to_signed(unsigned_acceleration, 12) * output_range.step(12)
 
 
 def _convert_to_signed(value: int, number_of_bits: int):
