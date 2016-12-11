@@ -10,11 +10,16 @@ class SMBus:
     def read_byte_data(device_address: int, register: int):
         if register == 0x0D:
             return 0x2A
-        else:
-            return 0
+        elif register == 0x00:
+            return 0x09
+
+        return 0
 
     @staticmethod
     def read_i2c_block_data(device_address: int, first_register: int, number_of_bytes: int):
+        if first_register == 0x00 and number_of_bytes == 7:
+            return [0x09, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00]
+
         return [0] * number_of_bytes
 
     @staticmethod

@@ -149,9 +149,9 @@ class AccelerometerMMA8452Q:
             z_acc = _convert_8_bit_acceleration(z_msb, self._range)
         else:
             [status, x_msb, x_lsb, y_msb, y_lsb, z_msb, z_lsb] = self._read_block(_REGISTER_STATUS, 7)
-            x_acc = _convert_12_bit_acceleration(x_msb, x_lsb, self._range)
-            y_acc = _convert_12_bit_acceleration(y_msb, y_lsb, self._range)
-            z_acc = _convert_12_bit_acceleration(z_msb, z_lsb, self._range)
+            x_acc = _convert_12_bit_acceleration(x_msb, x_lsb >> 4, self._range)
+            y_acc = _convert_12_bit_acceleration(y_msb, y_lsb >> 4, self._range)
+            z_acc = _convert_12_bit_acceleration(z_msb, z_lsb >> 4, self._range)
 
         overwritten = _is_flag_set(status, _REGISTER_STATUS_FLAG_ANY_AXIS_DATA_OVERWRITTEN)\
 
