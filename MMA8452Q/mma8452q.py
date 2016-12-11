@@ -72,10 +72,6 @@ class AccelerationRange(Enum):
     g4 = (4, _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_VALUE_4)
     g8 = (8, _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_VALUE_8)
 
-    def __new__(cls, acceleration_range: float, register_value: int):
-        obj = object.__new__(cls, acceleration_range, register_value)
-        return obj
-
     def __init__(self, acceleration_range: float, register_value: int):
         self._acceleration_range = acceleration_range
         self.register_value = register_value
@@ -93,10 +89,6 @@ class DataRate(Enum):
     hz12_5 = (12.5, _REGISTER_CONTROL_1__DATA_RATE_VALUE_12_5_HZ)
     hz6_25 = (6.25, _REGISTER_CONTROL_1__DATA_RATE_VALUE_6_25_HZ)
     hz1_56 = (1.56, _REGISTER_CONTROL_1__DATA_RATE_VALUE_1_56_HZ)
-
-    def __new__(cls, data_rate: float, register_value: int):
-        obj = object.__new__(cls, data_rate, register_value)
-        return obj
 
     def __init__(self, data_rate: float, register_value: int):
         self._data_rate = data_rate
@@ -241,7 +233,7 @@ class AccelerometerMMA8452Q:
         return self._i2c.read_i2c_block_data(self._address, first_register, number_of_bytes)
 
     def _write_byte(self, register: int, value: int):
-        return self._i2c.write_byte_data(register, value)
+        return self._i2c.write_byte_data(self._address, register, value)
 
 
 def _convert_8_bit_acceleration(msb: int, output_range: AccelerationRange):
