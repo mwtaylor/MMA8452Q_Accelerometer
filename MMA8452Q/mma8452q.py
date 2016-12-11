@@ -128,9 +128,9 @@ class AccelerometerMMA8452Q:
 
         self._set_configuration_registers()
 
-    def setup_and_enable(self, acceleration_range: AccelerationRange, fast_read: bool, data_rate: DataRate):
+    def enable(self):
         self._active = True
-        self.setup(acceleration_range, fast_read, data_rate)
+        self._set_configuration_registers()
 
     def is_data_ready(self):
         return self._read_flag(_REGISTER_STATUS, _REGISTER_STATUS_FLAG_ANY_AXIS_DATA_READY)
