@@ -196,17 +196,18 @@ class AccelerometerMMA8452Q:
         data_configuration = 0
         control1 = 0
 
-        _set_flag(control1, _REGISTER_CONTROL_1_FLAG_ACTIVE)
+        if self._active:
+            control1 = _set_flag(control1, _REGISTER_CONTROL_1_FLAG_ACTIVE)
 
-        _set_value_in_register(
+        data_configuration = _set_value_in_register(
             data_configuration,
             _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK,
             self._range.register_value)
 
         if self._fast_read:
-            _set_flag(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
+            control1 = _set_flag(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
 
-        _set_value_in_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK, self._data_rate.register_value)
+        control1 = _set_value_in_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK, self._data_rate.register_value)
 
         self._write_byte(_REGISTER_DATA_CONFIGURATION, data_configuration)
         self._write_byte(_REGISTER_CONTROL_1, control1)
@@ -262,8 +263,8 @@ def _is_flag_set(register_value: int, bit_number: int):
     return not _is_flag_clear(register_value, bit_number)
 
 
-def _set_flag(original_register_value: int, bit_number: int):
-    return original_register_value & (1 << bit_number)
+def _set_flag(original_register_value: int, bit_number: int) -> int:
+    return original_register_value | (1 << bit_number)
 
 
 def _get_value_from_register(register_value: int, mask: int):
@@ -291,4 +292,4 @@ def _set_value_in_register(original_register_value: int, mask: int, value: int):
         shifted_mask >>= 1
         bits_to_shift_value += 1
 
-    return (original_register_value & ~mask) & ((value << bits_to_shift_value) & mask)
+    return (original_register_value & ~mask) | ((value << bits_to_shift_value) & mask)
