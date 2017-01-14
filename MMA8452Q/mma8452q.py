@@ -1,7 +1,7 @@
 from smbus import SMBus
 from datetime import datetime
 from enum import Enum
-
+from decimal import Decimal
 
 _REGISTER_STATUS = 0x00
 _REGISTER_STATUS_FLAG_ANY_AXIS_DATA_OVERWRITTEN = 7
@@ -98,6 +98,71 @@ class DataRate(Enum):
         return 1 / self._data_rate
 
 
+class HighPassCutoff(Enum):
+    highest = _REGISTER_HIGH_PASS_FILTER_CONFIGURATION__HIGH_PASS_CUTOFF_VALUE_HIGHEST
+    high = _REGISTER_HIGH_PASS_FILTER_CONFIGURATION__HIGH_PASS_CUTOFF_VALUE_HIGH
+    low = _REGISTER_HIGH_PASS_FILTER_CONFIGURATION__HIGH_PASS_CUTOFF_VALUE_LOW
+    lowest = _REGISTER_HIGH_PASS_FILTER_CONFIGURATION__HIGH_PASS_CUTOFF_VALUE_LOWEST
+
+    def __init__(self, register_value: int):
+        self.register_value = register_value
+
+    @staticmethod
+    def from_frequency(frequency: Decimal, data_rate: DataRate):
+        cutoffs = {
+            DataRate.hz800: {
+                Decimal(16): HighPassCutoff.highest,
+                Decimal(8): HighPassCutoff.high,
+                Decimal(4): HighPassCutoff.low,
+                Decimal(2): HighPassCutoff.lowest
+            },
+            DataRate.hz400: {
+                Decimal(16): HighPassCutoff.highest,
+                Decimal(8): HighPassCutoff.high,
+                Decimal(4): HighPassCutoff.low,
+                Decimal(2): HighPassCutoff.lowest
+            },
+            DataRate.hz200: {
+                Decimal(8): HighPassCutoff.highest,
+                Decimal(4): HighPassCutoff.high,
+                Decimal(2): HighPassCutoff.low,
+                Decimal(1): HighPassCutoff.lowest
+            },
+            DataRate.hz100: {
+                Decimal(4): HighPassCutoff.highest,
+                Decimal(2): HighPassCutoff.high,
+                Decimal(1): HighPassCutoff.low,
+                Decimal("0.5"): HighPassCutoff.lowest
+            },
+            DataRate.hz50: {
+                Decimal(2): HighPassCutoff.highest,
+                Decimal(1): HighPassCutoff.high,
+                Decimal("0.5"): HighPassCutoff.low,
+                Decimal("0.25"): HighPassCutoff.lowest
+            },
+            DataRate.hz12_5: {
+                Decimal(2): HighPassCutoff.highest,
+                Decimal(1): HighPassCutoff.high,
+                Decimal("0.5"): HighPassCutoff.low,
+                Decimal("0.25"): HighPassCutoff.lowest
+            },
+            DataRate.hz6_25: {
+                Decimal(2): HighPassCutoff.highest,
+                Decimal(1): HighPassCutoff.high,
+                Decimal("0.5"): HighPassCutoff.low,
+                Decimal("0.25"): HighPassCutoff.lowest
+            },
+            DataRate.hz1_56: {
+                Decimal(2): HighPassCutoff.highest,
+                Decimal(1): HighPassCutoff.high,
+                Decimal("0.5"): HighPassCutoff.low,
+                Decimal("0.25"): HighPassCutoff.lowest
+            }
+        }
+
+        return cutoffs[data_rate][frequency]
+
+
 class AccelerationStatus:
     def __init__(self, overwritten: bool, x: int, y: int, z: int):
         self.overwritten = overwritten
@@ -115,6 +180,8 @@ class AccelerometerMMA8452Q:
         self._fast_read = False
         self._data_rate = DataRate.hz800
 
+        self._high_pass = None
+
         self._active = False
 
     def reset(self):
@@ -122,14 +189,16 @@ class AccelerometerMMA8452Q:
         self._wait_for_reset(datetime.now())
         self._synchronize_configuration_registers()
 
-    def setup(self, acceleration_range: AccelerationRange, fast_read: bool, data_rate: DataRate):
+    def configure(self, acceleration_range: AccelerationRange, fast_read: bool, data_rate: DataRate):
         self._range = acceleration_range
         self._fast_read = fast_read
         self._data_rate = data_rate
 
-        self._set_configuration_registers()
+    def enable_high_pass(self, cutoff: HighPassCutoff):
+        self._high_pass = cutoff
 
     def enable(self):
+        self._set_configuration_registers()
         self._active = True
         self._set_configuration_registers()
 
@@ -189,32 +258,53 @@ class AccelerometerMMA8452Q:
     def _synchronize_configuration_registers(self):
         data_configuration = self._read_byte(_REGISTER_DATA_CONFIGURATION)
         control1 = self._read_byte(_REGISTER_CONTROL_1)
+        high_pass_cutoff = self._read_byte(_REGISTER_HIGH_PASS_FILTER_CONFIGURATION)
 
         self._active = _is_flag_set(control1, _REGISTER_CONTROL_1_FLAG_ACTIVE)
 
         self._range = _get_value_from_register(data_configuration, _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK)
+
+        high_pass_enabled = _is_flag_set(data_configuration, _REGISTER_DATA_CONFIGURATION_FLAG_HIGH_PASS_FILTER_ENABLED)
+        if high_pass_enabled:
+            self._high_pass = _get_value_from_register(
+                high_pass_cutoff,
+                _REGISTER_HIGH_PASS_FILTER_CONFIGURATION__HIGH_PASS_CUTOFF_MASK)
+        else:
+            self._high_pass = None
+
         self._fast_read = _is_flag_set(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
         self._data_rate = _get_value_from_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK)
 
     def _set_configuration_registers(self):
         data_configuration = 0
         control1 = 0
+        high_pass_cutoff = 0
 
         if self._active:
             control1 = _set_flag(control1, _REGISTER_CONTROL_1_FLAG_ACTIVE)
-
-        data_configuration = _set_value_in_register(
-            data_configuration,
-            _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK,
-            self._range.register_value)
 
         if self._fast_read:
             control1 = _set_flag(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
 
         control1 = _set_value_in_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK, self._data_rate.register_value)
 
+        data_configuration = _set_value_in_register(
+            data_configuration,
+            _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK,
+            self._range.register_value)
+
+        if self._high_pass is not None:
+            data_configuration = _set_flag(
+                data_configuration,
+                _REGISTER_DATA_CONFIGURATION_FLAG_HIGH_PASS_FILTER_ENABLED)
+            high_pass_cutoff = _set_value_in_register(
+                high_pass_cutoff,
+                _REGISTER_HIGH_PASS_FILTER_CONFIGURATION__HIGH_PASS_CUTOFF_MASK,
+                self._high_pass.register_value)
+
         self._write_byte(_REGISTER_DATA_CONFIGURATION, data_configuration)
         self._write_byte(_REGISTER_CONTROL_1, control1)
+        self._write_byte(_REGISTER_HIGH_PASS_FILTER_CONFIGURATION, high_pass_cutoff)
 
     def _read_acceleration(self, register: int):
         if self._fast_read:

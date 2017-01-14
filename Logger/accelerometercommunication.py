@@ -2,7 +2,8 @@ import threading
 import queue
 import time
 from datetime import datetime
-from mma8452q import AccelerometerMMA8452Q, AccelerationRange, DataRate
+from mma8452q import AccelerometerMMA8452Q, AccelerationRange, DataRate, HighPassCutoff
+from decimal import Decimal
 
 
 class AccelerometerCommunication(threading.Thread):
@@ -19,7 +20,8 @@ class AccelerometerCommunication(threading.Thread):
         accelerometer.reset()
 
         data_rate = DataRate.hz6_25
-        accelerometer.setup(AccelerationRange.g2, False, data_rate)
+        accelerometer.configure(AccelerationRange.g2, False, data_rate)
+        accelerometer.enable_high_pass(HighPassCutoff.from_frequency(Decimal("0.25"), data_rate))
         accelerometer.enable()
 
         expected_period = data_rate.period()
