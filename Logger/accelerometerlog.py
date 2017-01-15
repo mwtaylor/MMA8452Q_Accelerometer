@@ -1,9 +1,10 @@
-from accelerometercommunication import AccelerometerCommunication, stop_command
-from mma8452q import AccelerationStatus
+from mma8452q.communication import AccelerometerCommunication, stop_command
+from mma8452q.device import AccelerationStatus, AccelerometerMMA8452Q, DataRate, AccelerationRange, HighPassCutoff
 import queue
 import csv
 from datetime import datetime
 import argparse
+from decimal import Decimal
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Log data from the connected accelerometer")
@@ -18,8 +19,17 @@ if __name__ == "__main__":
     acceleration_queue = queue.Queue()
     command_queue = queue.Queue()
 
-    accelerometer = AccelerometerCommunication(acceleration_queue, command_queue, args.device_address)
-    accelerometer.start()
+    accelerometer = AccelerometerMMA8452Q(1, args.device_address)
+    accelerometer.reset()
+
+    data_rate = DataRate.hz6_25
+    accelerometer.data_rate = data_rate
+    accelerometer.range = AccelerationRange.g2
+    accelerometer.fast_read = False
+    accelerometer.enable_high_pass(HighPassCutoff.from_frequency(Decimal("0.25"), data_rate))
+
+    accelerometer_thread = AccelerometerCommunication(acceleration_queue, command_queue, accelerometer)
+    accelerometer_thread.start()
 
     start_time = datetime.now()
 
@@ -59,4 +69,4 @@ if __name__ == "__main__":
 
     command_queue.put_nowait(stop_command)
 
-    accelerometer.join()
+    accelerometer_thread.join()

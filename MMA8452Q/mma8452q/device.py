@@ -176,9 +176,9 @@ class AccelerometerMMA8452Q:
         self._address = i2c_address
         self._i2c = SMBus(i2c_device)
 
-        self._range = AccelerationRange.g2
-        self._fast_read = False
-        self._data_rate = DataRate.hz800
+        self.range = AccelerationRange.g2
+        self.fast_read = False
+        self.data_rate = DataRate.hz800
 
         self._high_pass = None
 
@@ -189,13 +189,15 @@ class AccelerometerMMA8452Q:
         self._wait_for_reset(datetime.now())
         self._synchronize_configuration_registers()
 
-    def configure(self, acceleration_range: AccelerationRange, fast_read: bool, data_rate: DataRate):
-        self._range = acceleration_range
-        self._fast_read = fast_read
-        self._data_rate = data_rate
+    @property
+    def high_pass(self):
+        return self._high_pass
 
     def enable_high_pass(self, cutoff: HighPassCutoff):
         self._high_pass = cutoff
+
+    def disable_high_pass(self):
+        self._high_pass = None
 
     def enable(self):
         self._set_configuration_registers()
@@ -215,16 +217,16 @@ class AccelerometerMMA8452Q:
         return self._read_acceleration(_REGISTER_Z_ACCELERATION)
 
     def read_acceleration_and_status(self):
-        if self._fast_read:
+        if self.fast_read:
             [status, x_msb, y_msb, z_msb] = self._read_block(_REGISTER_STATUS, 4)
-            x_acc = _convert_8_bit_acceleration(x_msb, self._range)
-            y_acc = _convert_8_bit_acceleration(y_msb, self._range)
-            z_acc = _convert_8_bit_acceleration(z_msb, self._range)
+            x_acc = _convert_8_bit_acceleration(x_msb, self.range)
+            y_acc = _convert_8_bit_acceleration(y_msb, self.range)
+            z_acc = _convert_8_bit_acceleration(z_msb, self.range)
         else:
             [status, x_msb, x_lsb, y_msb, y_lsb, z_msb, z_lsb] = self._read_block(_REGISTER_STATUS, 7)
-            x_acc = _convert_12_bit_acceleration(x_msb, x_lsb >> 4, self._range)
-            y_acc = _convert_12_bit_acceleration(y_msb, y_lsb >> 4, self._range)
-            z_acc = _convert_12_bit_acceleration(z_msb, z_lsb >> 4, self._range)
+            x_acc = _convert_12_bit_acceleration(x_msb, x_lsb >> 4, self.range)
+            y_acc = _convert_12_bit_acceleration(y_msb, y_lsb >> 4, self.range)
+            z_acc = _convert_12_bit_acceleration(z_msb, z_lsb >> 4, self.range)
 
         overwritten = _is_flag_set(status, _REGISTER_STATUS_FLAG_ANY_AXIS_DATA_OVERWRITTEN)\
 
@@ -262,7 +264,7 @@ class AccelerometerMMA8452Q:
 
         self._active = _is_flag_set(control1, _REGISTER_CONTROL_1_FLAG_ACTIVE)
 
-        self._range = _get_value_from_register(data_configuration, _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK)
+        self.range = _get_value_from_register(data_configuration, _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK)
 
         high_pass_enabled = _is_flag_set(data_configuration, _REGISTER_DATA_CONFIGURATION_FLAG_HIGH_PASS_FILTER_ENABLED)
         if high_pass_enabled:
@@ -272,8 +274,8 @@ class AccelerometerMMA8452Q:
         else:
             self._high_pass = None
 
-        self._fast_read = _is_flag_set(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
-        self._data_rate = _get_value_from_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK)
+        self.fast_read = _is_flag_set(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
+        self.data_rate = _get_value_from_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK)
 
     def _set_configuration_registers(self):
         data_configuration = 0
@@ -283,15 +285,15 @@ class AccelerometerMMA8452Q:
         if self._active:
             control1 = _set_flag(control1, _REGISTER_CONTROL_1_FLAG_ACTIVE)
 
-        if self._fast_read:
+        if self.fast_read:
             control1 = _set_flag(control1, _REGISTER_CONTROL_1_FLAG_FAST_READ_ENABLED)
 
-        control1 = _set_value_in_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK, self._data_rate.register_value)
+        control1 = _set_value_in_register(control1, _REGISTER_CONTROL_1__DATA_RATE_MASK, self.data_rate.register_value)
 
         data_configuration = _set_value_in_register(
             data_configuration,
             _REGISTER_DATA_CONFIGURATION__FULL_SCALE_RANGE_MASK,
-            self._range.register_value)
+            self.range.register_value)
 
         if self._high_pass is not None:
             data_configuration = _set_flag(
@@ -307,13 +309,13 @@ class AccelerometerMMA8452Q:
         self._write_byte(_REGISTER_HIGH_PASS_FILTER_CONFIGURATION, high_pass_cutoff)
 
     def _read_acceleration(self, register: int):
-        if self._fast_read:
-            return _convert_8_bit_acceleration(self._read_byte(register), self._range)
+        if self.fast_read:
+            return _convert_8_bit_acceleration(self._read_byte(register), self.range)
         else:
             raw_data = self._read_word(register)
             msb = raw_data & 0x00FF
             lsb = raw_data & 0xF000 >> 12
-            return _convert_12_bit_acceleration(msb, lsb, self._range)
+            return _convert_12_bit_acceleration(msb, lsb, self.range)
 
     def _read_byte(self, register: int):
         return self._i2c.read_byte_data(self._address, register)
