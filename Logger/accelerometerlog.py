@@ -36,7 +36,7 @@ if __name__ == "__main__":
     with open(args.output_file, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file)
 
-        while (datetime.now() - start_time).seconds < args.run_duration:
+        while (datetime.now() - start_time).total_seconds() < args.run_duration:
             while not acceleration_queue.empty():
                 queue_value = acceleration_queue.get_nowait()
 
